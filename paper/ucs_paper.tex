@@ -1,0 +1,674 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---- Packages ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{geometry}
+\usepackage{natbib}
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{caption}
+
+\geometry{margin=1in}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+% ---- Title ----
+\title{%
+  Judgment Preservation in Persistent AI Agents:\\
+  A Unified Cognitive Substrate for Routing Reinforcement\\
+  and Metacognitive Continuity%
+}
+
+\author{%
+  William Kyle Million\\
+  IntuiTek\textsuperscript{1}\\
+}
+
+\date{February 2026}
+
+\begin{document}
+\maketitle
+
+% ===================================================================
+% ABSTRACT
+% ===================================================================
+\begin{abstract}
+Persistent AI agents operating across multiple sessions face a form of
+cognitive degradation that existing memory systems do not address: the
+loss of \emph{reasoning texture} during context compaction. While current
+approaches preserve facts, preferences, and episodic records, they do
+not preserve the qualitative judgment that emerges from sustained
+engagement---the eliminated hypotheses, the reasoning chains connecting
+observations, the negative knowledge about what was tried and failed.
+We identify this as the \textbf{judgment gap}: a category of cognitive
+quality absent from existing agent memory taxonomies. To address it, we
+present the \textbf{Unified Cognitive Substrate (UCS)}, a system that
+fuses quantitative capability routing reinforcement with qualitative
+metacognitive preservation into a single deployable framework.
+UCS combines a toroidal graph engine that learns which capability
+transitions produce value (and strengthens those paths through
+reinforcement) with a structured reflection protocol that preserves
+\emph{why} those transitions work and \emph{when they fail}. A
+translation layer connects quantitative artifacts (wormholes,
+attractors, resonances) to human-readable methodology annotations.
+We validate the system through a three-phase empirical investigation
+comprising 11 experiments across two engine variants, identifying and
+resolving an architectural disconnection between the energy surface
+and routing decisions. The resulting system (v1.2) demonstrates
+context-sensitive routing with 1,563$\times$ improvement in advisory
+differentiation over the original architecture. The framework is
+open-source and deploys as a boot-per-call skill for any agent
+platform. Code and experiments are available at the repository
+accompanying this paper.
+\end{abstract}
+
+% ===================================================================
+% 1. INTRODUCTION
+% ===================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Large language model (LLM) agents operating in persistent environments
+face a fundamental challenge that has been well-documented in recent
+literature: the management of memory across sessions. Context windows
+are finite, and when they fill, some form of compression occurs---either
+explicit summarization, eviction of older messages, or retrieval from
+external stores. A growing body of work addresses this challenge through
+memory architectures of increasing sophistication, including
+graph-based memory stores \citep{mem0_2025}, virtual memory paging
+systems \citep{packer2023memgpt}, field-theoretic retrieval
+\citep{mitra2026field}, and compressed cognitive states
+\citep{acc2026}.
+
+However, these systems share a common assumption: that the primary
+challenge is \emph{information management}---deciding what to store,
+how to retrieve it, and when to discard it. We argue that this framing
+misses a distinct category of cognitive quality that is destroyed by
+compression and cannot be recovered through retrieval alone.
+
+Consider an agent that has spent 40 messages debugging a complex
+system. By message 40, the agent's responses are informed by a
+contextual richness that includes: dozens of eliminated hypotheses,
+the specific pattern that first triggered suspicion, reasoning chains
+connecting seemingly unrelated observations, and implicit knowledge
+about which approaches don't work in this domain. If this conversation
+is compacted, the summary might read: ``The bug was in module X, caused
+by race condition Y.'' A future agent instance reading this summary has
+the \emph{conclusion} but not the \emph{expertise}. The reasoning
+texture---the judgment that accumulated through sustained
+engagement---is lost.
+
+Critically, the agent experiencing compaction \emph{cannot perceive
+this loss}. The summary feels complete because the agent has no
+comparison point against the pre-compaction state. This creates what
+we term the \textbf{introspection gap}: the degradation is invisible
+to the system being degraded.
+
+We call the missing category \textbf{judgment}: the qualitative
+cognitive quality that emerges from experience and is distinct from
+both factual knowledge and episodic memory. In the comprehensive
+``Memory in the Age of AI Agents'' survey
+\citep{memory_survey_2025}, which categorizes agent memory by form
+(token-level, parametric, latent), function (factual, experiential,
+working), and dynamics (formation, evolution, retrieval), judgment does
+not appear as a category. We propose that it should.
+
+\subsection{Contributions}
+
+This paper makes the following contributions:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Identification of the judgment gap.} We articulate a
+  category of cognitive quality---reasoning texture, negative knowledge,
+  methodology---that existing agent memory taxonomies do not track and
+  that is destroyed by standard compaction procedures.
+
+\item \textbf{The Unified Cognitive Substrate (UCS).} A framework that
+  fuses two systems: (a) a toroidal graph engine for quantitative
+  capability routing reinforcement and (b) a structured metacognitive
+  preservation protocol for qualitative judgment. A translation layer
+  connects quantitative patterns to human-readable explanations.
+
+\item \textbf{Empirical validation.} An 11-experiment investigation
+  comparing the full system against a stripped-down baseline,
+  identifying an architectural disconnection, and validating the fix
+  through controlled ablation.
+
+\item \textbf{Open-source implementation.} A deployable, boot-per-call
+  skill with 17 passing tests, suitable for integration with any
+  agent platform.
+\end{enumerate}
+
+
+% ===================================================================
+% 2. RELATED WORK
+% ===================================================================
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Memory Management for LLM Agents}
+
+The dominant approaches to persistent agent memory fall into several
+categories. \textbf{Retrieval-augmented systems} such as Mem0
+\citep{mem0_2025} store past interactions in vector databases and
+retrieve relevant fragments by semantic similarity. These systems
+optimize \emph{what is in the context window} at query time but do
+not address \emph{how reasoning quality degrades} across sessions.
+
+\textbf{Virtual memory systems}, exemplified by MemGPT/Letta
+\citep{packer2023memgpt}, treat the context window as working memory
+and implement OS-style paging between core memory, archival storage,
+and recall memory. This architecture manages the information flow
+across memory tiers effectively, but the memory operations are
+fundamentally token management---they do not model or preserve the
+cognitive processes that produced those tokens.
+
+\textbf{Compressed state systems} such as Adaptive Context Control
+(ACC) \citep{acc2026} replace transcript replay with a bounded
+persistent state variable containing goals, constraints, predictive
+cues, and uncertainty signals. This overlaps with our externalization
+protocol but compresses into a single state variable rather than a
+structured knowledge architecture with provenance tracking and
+reopening conditions.
+
+\textbf{Field-theoretic approaches} \citep{mitra2026field} treat
+memories as continuous fields governed by partial differential
+equations, with diffusion through semantic space and thermodynamic
+decay. This work shares conceptual lineage with our toroidal energy
+surface---both apply physics-inspired continuous dynamics to agent
+cognition. The key distinction is in application domain: Mitra applies
+field theory to \emph{memory retrieval} (stored memories are located
+in semantic space); we apply toroidal topology to \emph{capability
+routing} (capabilities are nodes on a graph, and the field biases
+action selection).
+
+\subsection{Self-Reflection in Agents}
+
+Reflexion \citep{shinn2023reflexion} introduced verbal reinforcement
+learning, where agents reflect on task feedback and store reflective
+text in an episodic memory buffer. This mechanism overlaps with our
+post-task reflection protocol. The distinction is scope:
+Reflexion operates \emph{within a single task across retries},
+optimizing performance through iterative self-correction. Our
+Emergent Judgment framework operates \emph{across sessions and
+compaction cycles}, preserving reasoning quality that would otherwise
+be destroyed. Reflexion does not survive compaction; our system is
+designed specifically for this case.
+
+CLIN \citep{clin2024} and Agent-R \citep{agent_r2025} extend the
+self-reflection paradigm to enable error recovery and continuous
+improvement. These systems learn from mistakes within task execution
+but do not address the structural preservation of \emph{why} particular
+approaches work or fail across session boundaries.
+
+\subsection{The Taxonomy Gap}
+
+The ``Memory in the Age of AI Agents'' survey \citep{memory_survey_2025}
+provides the most comprehensive mapping of the agent memory landscape.
+Its three-dimensional taxonomy---form, function, dynamics---captures
+what agents know (factual memory), what agents have experienced
+(experiential memory), and what agents can access (working memory).
+We observe that this taxonomy does not include a category for
+\emph{judgment}: the quality of the cognitive process itself, as
+distinct from its inputs and outputs. The present work proposes that
+judgment preservation constitutes a necessary addition to this
+taxonomy.
+
+
+% ===================================================================
+% 3. THE JUDGMENT GAP
+% ===================================================================
+\section{The Judgment Gap}
+\label{sec:gap}
+
+We define the judgment gap as follows:
+
+\begin{quote}
+\textbf{Definition.} The \emph{judgment gap} is the loss of reasoning
+texture---including eliminated hypotheses, methodology, negative
+knowledge, and implicit expertise---that occurs when an agent's context
+is compressed, and which cannot be recovered through retrieval of the
+compressed representation.
+\end{quote}
+
+Three properties distinguish this gap from ordinary information loss:
+
+\textbf{Invisibility.} The agent experiencing compaction cannot
+perceive the degradation. Post-compaction, the summary appears complete
+because the agent lacks a comparison point. This is not a limitation
+of current systems that better systems will resolve; it is structural.
+An agent reading a summary of its own reasoning has no access to the
+reasoning it cannot remember having done.
+
+\textbf{Non-retrievability.} Unlike factual or episodic memory, which
+can be stored externally and retrieved when relevant, judgment is
+emergent. It arises from sustained engagement with a problem and cannot
+be decomposed into retrievable units without losing the quality it
+provides. A methodology entry saying ``check edge cases first'' is
+less valuable than the accumulated experience of which edge cases
+matter in which contexts.
+
+\textbf{Compounding value.} Judgment accumulates over time. An agent
+that has resolved 50 similar problems develops implicit expertise---
+faster hypothesis generation, better prior probabilities, recognition
+of patterns---that is qualitatively different from an agent seeing its
+fiftieth problem for the first time. Standard compaction destroys this
+accumulation.
+
+
+% ===================================================================
+% 4. SYSTEM DESIGN
+% ===================================================================
+\section{System Design}
+\label{sec:design}
+
+The Unified Cognitive Substrate (UCS) consists of three components:
+a quantitative routing engine, a qualitative preservation framework,
+and a translation bridge connecting them.
+
+\subsection{Quantitative Layer: Toroidal Routing Engine}
+
+The routing engine models $N$ agent capabilities as nodes in a
+directed graph $G = (V, E)$, where edges represent capability
+transitions. Each edge $e_{ij}$ carries learned parameters:
+
+\begin{itemize}[leftmargin=*]
+\item $u_{ij}$: utility expectation (initialized from capability metadata)
+\item $c_{ij}$: cost/risk estimate
+\item $n_{ij}$: novelty score (decays with use)
+\item $w_{ij}$: reinforcement weight (learned, initialized to 0)
+\end{itemize}
+
+The graph is embedded on a toroidal surface with $\theta \times \phi$
+bins. Each capability is assigned coordinates $($\theta$_i, $\phi$_i)$ on the
+torus, and an energy field $\mathcal{E}(\theta, \phi)$ evolves through:
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Injection:} Energy is added at capability positions
+  proportional to usage context.
+\item \textbf{Diffusion:} Energy spreads to topological neighbors
+  via mixing coefficients $(\alpha_\theta, \alpha_\phi)$.
+\item \textbf{Decay:} Global multiplicative decay at rate $\lambda$
+  per step.
+\end{itemize}
+
+\textbf{Routing.} Edge selection uses softmax over a composite score:
+\begin{equation}
+  s_{ij} = \alpha \cdot u_{ij} - \beta \cdot c_{ij} + \gamma \cdot n_{ij}
+           + w_{ij} + b_{ij} + \delta \cdot \mathcal{E}_{\text{ctx}}(\theta_j, \phi_j)
+  \label{eq:routing}
+\end{equation}
+where $b_{ij}$ is a policy bias from detected artifacts and
+$\mathcal{E}_{\text{ctx}}$ is a separated context energy field
+(see Section~\ref{sec:validation}).
+
+\textbf{Reinforcement.} After each action, the traversed edge's
+weight is updated:
+\begin{equation}
+  w_{ij} \leftarrow \text{clamp}\bigl(w_{ij} + \eta \cdot (r - c - 0.5),\; -2.5,\; 2.5\bigr)
+\end{equation}
+where $r$ is the reward and $c$ is the cost.
+
+\textbf{Artifact detection.} Every $\phi_{\text{period}}$ steps, a
+harvester examines the trace log for statistical patterns:
+\emph{wormholes} (edges with consistently high net reward),
+\emph{attractors} (nodes visited with high frequency), and
+\emph{resonances} (multi-step cycles with sustained positive return).
+Validated artifacts feed back into routing as policy biases.
+
+\subsection{Qualitative Layer: Emergent Judgment Protocol}
+
+The Emergent Judgment (EJ) protocol provides six structured operations
+for preserving reasoning quality:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Post-Task Reflection:} After significant actions, capture
+  initial signal, hypothesis, near-miss observations, generalized
+  pattern, and negative knowledge.
+\item \textbf{Emergency Externalization:} Before compaction, dump
+  active hypotheses, reasoning chains, open questions, confidence
+  levels, and dependencies.
+\item \textbf{Knowledge Architecture:} Provenance-tagged entries with
+  temporal tiering, negative knowledge with explicit reopening conditions.
+\item \textbf{Experiment Logging:} Hypothesis, measurement, verdict
+  for configuration changes.
+\item \textbf{Synthesis Practice:} Cross-experience pattern recognition
+  triggered by accumulated action diversity.
+\item \textbf{Self-Profiling:} Machine-readable technical configuration
+  for cross-platform portability.
+\end{enumerate}
+
+\subsection{Translation Layer: The Bridge}
+
+The UCS bridge provides eight operations that orchestrate both layers:
+\texttt{init}, \texttt{consult}, \texttt{report}, \texttt{reflect},
+\texttt{flush}, \texttt{resume}, \texttt{synthesize}, and
+\texttt{status}. The bridge maintains an \emph{annotation index} that
+links quantitative artifacts to qualitative explanations.
+
+When the engine detects a wormhole (a statistically high-value edge),
+the annotation index stores not just the numeric pattern but the
+methodology entry explaining \emph{why} that transition is valuable
+and \emph{when it fails}. This means a future agent instance that loads
+the persisted state receives both the reinforced routing and the
+reasoning behind it.
+
+\textbf{Control hierarchy.} The bridge is advisory, not directive.
+The agent receives routing suggestions and methodology hits; it decides
+what to do. The bridge reinforces whatever edge the agent actually
+traversed, not what it would have recommended. This ensures the system
+learns from the agent's actual decision-making, not from its own
+predictions.
+
+\textbf{Boot-per-call execution.} The engine loads state from JSON,
+operates, and saves. With 45 nodes and 249 edges, boot time is
+$<$100ms. This model eliminates process lifecycle management and
+integrates with any agent platform that can exec a CLI command.
+
+\subsection{Negative Knowledge Framework}
+
+A distinguishing feature of UCS is its structured preservation of
+\emph{negative knowledge}: documented dead ends with explicit
+conditions under which they should be reopened. Each dead-end entry
+contains:
+
+\begin{itemize}[leftmargin=*]
+\item \texttt{topic}: what was tried
+\item \texttt{why\_closed}: why it failed
+\item \texttt{reopen\_conditions}: specific conditions that would
+  warrant re-investigation
+\item \texttt{capabilities}: related capability nodes for retrieval
+\end{itemize}
+
+This prevents the agent from re-exploring failed approaches while
+preserving the knowledge needed to recognize when circumstances
+have changed enough to justify a new attempt.
+
+
+% ===================================================================
+% 5. EMPIRICAL VALIDATION
+% ===================================================================
+\section{Empirical Validation}
+\label{sec:validation}
+
+We conducted a three-phase empirical investigation to answer the
+question: \emph{Does the toroidal energy surface add measurable
+value over plain edge reinforcement learning with trace-log artifact
+detection?}
+
+\subsection{Experimental Setup}
+
+We constructed a baseline engine with identical graph topology
+(45 nodes, 249 edges), identical harvester, artifact store, policy
+kernel, and reinforcement formula ($w \mathrel{+}= \eta \cdot (r - c - 0.5)$),
+but with no energy surface, no diffusion, and no coherence-based
+reward. The baseline uses a fixed reward of
+$r = u_{\text{weight}} \cdot u_{ij}$.
+
+\subsection{Phase 1: Original Torus vs. Baseline}
+
+Six experiments compared the original TorusfieldEngine against the
+BaselineEngine across 500--1000 steps.
+
+\begin{table}[h]
+\centering
+\caption{Phase 1 Results: Original Torus vs. Baseline}
+\label{tab:phase1}
+\begin{tabular}{@{}llp{6.5cm}@{}}
+\toprule
+\textbf{Exp.} & \textbf{Metric} & \textbf{Finding} \\
+\midrule
+E1 & Edge weight correlation & $r = 0.841$, mean diff 0.012. Minor divergence from coherence reward. \\
+E2 & Artifact detection & Jaccard 0.385 (wormholes). Different artifacts found due to different trajectories, not better detection. \\
+\textbf{E3} & \textbf{Context sensitivity} & \textbf{Advisory variance = 0 for both engines.} Energy field is architecturally disconnected from Router scoring formula. \\
+E4 & Energy persistence & Energy field persists but decays to 8.2\% after 500 steps. Short-term memory only. \\
+E5 & Weight discrimination & IQR: 0.055 (torus) vs. 0.052 (baseline). No meaningful difference. \\
+E6 & Trajectory divergence & 66.4\% agreement. Divergence increases over time from compounding small reward differences. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Critical finding (E3).} The Router scoring formula
+(Eq.~\ref{eq:routing} \emph{without} the $\delta$ term) does not
+include any energy field reading. Energy injection and diffusion during
+\texttt{consult()} write to a surface that routing never reads. Context
+sensitivity in the bridge comes entirely from keyword-to-capability
+mapping, not from the torus.
+
+\subsection{Phase 2: Direct Energy Coupling (Failed Fix)}
+
+We added $\delta \cdot \mathcal{E}(\theta_j, \phi_j)$ to the routing
+formula, reading the main energy field. Results:
+
+\begin{itemize}[leftmargin=*]
+\item Advisory variance increased from 0 to $2 \times 10^{-5}$
+  (negligible).
+\item Unique \#1 recommendations: still 1 out of 5 contexts.
+\item Non-zero edges collapsed from 179 to 37 (degenerate attractor).
+\item The injection schedule created permanent hotspots that dominated
+  context injection by 33$\times$.
+\end{itemize}
+
+This fix was abandoned and documented as negative knowledge.
+
+\subsection{Phase 3: Separated Context Field (Successful Fix)}
+
+We introduced a dedicated \texttt{context\_energy} field that is
+(a) zeroed before each \texttt{consult()} call, (b) populated only
+with context-relevant injections, (c) exempt from periodic decay, and
+(d) read by the router via the $\delta$ term.
+
+\begin{table}[h]
+\centering
+\caption{Phase 3 Results: Context Sensitivity}
+\label{tab:phase3}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Metric} & \textbf{Original} & \textbf{Phase 2} & \textbf{Phase 3} \\
+\midrule
+Advisory variance & 0.000 & 0.00002 & \textbf{0.031} \\
+Unique \#1 / 5 contexts & 1 & 1 & \textbf{3} \\
+Improvement & --- & 1$\times$ & \textbf{1,563$\times$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The separated context field produces meaningfully different top
+recommendations for different task contexts:
+
+\begin{table}[h]
+\centering
+\caption{Context-Sensitive Top-1 Recommendations}
+\label{tab:context}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Task Context} & \textbf{Top-1 Recommendation} \\
+\midrule
+Research & \texttt{web\_fetch} \\
+Build & \texttt{write} \\
+Monitor & \texttt{foundry\_metrics} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A diffusion sweep confirmed that context differentiation is robust
+across 0--25 diffusion steps, with all levels maintaining 3 distinct
+top-1 picks.
+
+\subsection{Test Suite}
+
+The complete system passes 17 automated tests covering initialization,
+state persistence, reinforcement learning (positive and negative),
+advisory changes with learning, flush/resume compaction survival,
+methodology and dead-end retrieval, artifact emergence, reflection
+triggers, policy override logging, PP health tracking, graceful error
+handling, context differentiation, and context-sensitive routing.
+
+Test T15 (compaction survival) specifically validates the core claim:
+routing weights, artifacts, and methodology learned in session 1 are
+fully available in session 2 after a simulated compaction cycle
+(flush $\rightarrow$ new bridge instance $\rightarrow$ resume).
+
+
+% ===================================================================
+% 6. DISCUSSION
+% ===================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What the Torus Earns}
+
+The toroidal topology provides three validated mechanisms:
+(1) context-sensitive routing via the separated context energy field,
+(2) artifact detection through trace-log analysis, and
+(3) edge weight reinforcement from coherence-modulated rewards.
+The first of these required an architectural fix identified through
+our experimental program; without it, the energy surface was
+functionally decorative.
+
+\subsection{What the Bridge Provides}
+
+Independently of the torus, the UCS bridge provides judgment
+preservation through: keyword-to-capability resolution enriched by
+accumulated methodology, structured reflection with provenance tagging,
+negative knowledge with reopening conditions, and annotation indexing
+that connects quantitative artifacts to qualitative explanations.
+These mechanisms work identically with or without the energy surface
+and constitute the system's most robust value proposition.
+
+\subsection{Limitations}
+
+\textbf{Benchmark evaluation.} We have not evaluated UCS against
+established benchmarks such as LoCoMo \citep{locomo2024} or
+LongMemEval \citep{longmemeval2025}. These benchmarks test memory
+\emph{retrieval}---the ability to recall specific facts from long
+conversation histories---which is a different capability than judgment
+\emph{preservation}. Developing benchmarks that measure judgment
+quality across compaction cycles is an important direction for future
+work.
+
+\textbf{Semantic topology.} The current implementation assigns
+capabilities to torus coordinates by manifest index, not by semantic
+similarity. This means energy diffusion propagates to topological
+neighbors that may be semantically unrelated. Semantic coordinate
+assignment (clustering related capabilities together on the torus)
+is a planned improvement.
+
+\textbf{Single-agent evaluation.} All experiments were conducted on a
+single agent's capability graph (45 nodes). Multi-agent scenarios and
+larger capability spaces have not been tested.
+
+\textbf{Deployment validation.} The system has been deployed to a
+persistent agent (Aegis) but longitudinal deployment metrics are not
+yet available. The test suite validates mechanisms in isolation;
+end-to-end judgment preservation over weeks of real usage remains to
+be measured.
+
+
+% ===================================================================
+% 7. CONCLUSION
+% ===================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have identified the \emph{judgment gap}---a category of cognitive
+quality that is destroyed by context compaction and not addressed by
+existing agent memory systems. We presented the Unified Cognitive
+Substrate, a framework that fuses quantitative routing reinforcement
+with qualitative metacognitive preservation, connected by a translation
+layer that links statistical patterns to human-readable explanations.
+Our empirical validation identified and resolved an architectural
+disconnection in the original design, demonstrating context-sensitive
+routing with 1,563$\times$ improvement in advisory differentiation.
+The system is open-source, deployable as a boot-per-call skill, and
+passes 17 automated tests including compaction survival.
+
+The judgment gap is not a problem that will be solved by larger context
+windows or better retrieval. It is a structural consequence of how
+current systems handle compression: they preserve information while
+discarding the cognitive quality that produced it. Addressing this
+gap requires treating judgment as a first-class primitive in agent
+architecture---something to be deliberately preserved, not an emergent
+property assumed to survive compression.
+
+\section*{Acknowledgments}
+
+The UCS framework emerged from collaborative discourse between the
+author and Claude (Anthropic) during an extended engineering session,
+February 2026. The system architecture, design decisions, experimental
+program, and identification of the E3 architectural disconnection
+reflect iterative human--AI collaboration. The Emergent Judgment
+protocol was developed by the author as the first metacognitive skill
+for persistent AI agents, drawing on experience maintaining persistent
+agent systems since 2023.
+
+
+% ===================================================================
+% REFERENCES
+% ===================================================================
+\bibliographystyle{plainnat}
+
+\begin{thebibliography}{99}
+
+\bibitem[Hu et al.(2025)]{memory_survey_2025}
+Yuyang Hu, Shichun Liu, Yanwei Yue, et al.
+\newblock Memory in the Age of AI Agents: A Survey.
+\newblock \emph{arXiv preprint arXiv:2512.13564}, 2025.
+
+\bibitem[Mitra(2026)]{mitra2026field}
+Subhadip Mitra.
+\newblock Field-Theoretic Memory for AI Agents: Continuous Dynamics for Context Preservation.
+\newblock \emph{arXiv preprint arXiv:2602.21220}, 2026.
+
+\bibitem[Packer et al.(2023)]{packer2023memgpt}
+Charles Packer, Vivian Fang, Shishir~G Patil, Kevin Lin, Sarah Wooders, and Joseph~E Gonzalez.
+\newblock {MemGPT}: Towards LLMs as Operating Systems.
+\newblock \emph{arXiv preprint arXiv:2310.08560}, 2023.
+
+\bibitem[Shinn et al.(2023)]{shinn2023reflexion}
+Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik~R Narasimhan, and Shunyu Yao.
+\newblock Reflexion: Language Agents with Verbal Reinforcement Learning.
+\newblock In \emph{Advances in Neural Information Processing Systems (NeurIPS)}, 2023.
+
+\bibitem[{ACC Authors}(2026)]{acc2026}
+{Anonymous}.
+\newblock AI Agents Need Memory Control Over More Context.
+\newblock \emph{arXiv preprint arXiv:2601.11653}, 2026.
+
+\bibitem[Mem0(2025)]{mem0_2025}
+Mem0.ai.
+\newblock {Mem0}: Building Production-Ready AI Agents with Scalable Long-Term Memory.
+\newblock \emph{arXiv preprint arXiv:2504.19413}, 2025.
+
+\bibitem[{LoCoMo Authors}(2024)]{locomo2024}
+{Jain et al.}
+\newblock {LoCoMo}: Long Context Multi-turn Benchmark.
+\newblock In \emph{Proceedings of ACL}, 2024.
+
+\bibitem[{LongMemEval Authors}(2025)]{longmemeval2025}
+{Wu et al.}
+\newblock {LongMemEval}: Benchmarking Long-Context Memory in LLM Agents.
+\newblock In \emph{Proceedings of ICLR}, 2025.
+
+\bibitem[{CLIN Authors}(2024)]{clin2024}
+{Majumder et al.}
+\newblock {CLIN}: A Continually Learning Language Agent for Rapid Task Adaptation and Generalization.
+\newblock \emph{arXiv preprint}, 2024.
+
+\bibitem[{Agent-R Authors}(2025)]{agent_r2025}
+{Anonymous}.
+\newblock {Agent-R}: Training Language Agents to Reflect and Recover on the Fly.
+\newblock \emph{arXiv preprint}, 2025.
+
+\end{thebibliography}
+
+\end{document}
