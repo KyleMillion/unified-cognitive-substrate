@@ -1,5 +1,7 @@
 # Unified Cognitive Substrate (UCS)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18794175.svg)](https://doi.org/10.5281/zenodo.18794175)
+
 **Judgment Preservation in Persistent AI Agents**
 
 *By William Kyle Million (~K¹) — IntuiTek¹*
