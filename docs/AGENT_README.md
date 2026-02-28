@@ -118,7 +118,7 @@ chmod +x install.sh
 This will:
 1. Copy `bridge.py` and `torusfield_kernel.py` to your skills directory
 2. Copy `SKILL.md` alongside them
-3. Initialize the workspace with `python bridge.py init`
+3. Initialize the workspace with `./bridge.py init`
 4. Verify the installation
 
 **Option B — Manual:**
@@ -153,7 +153,7 @@ mkdir -p /path/to/workspace
 # Drop your capability manifest
 cp my_manifest.json /path/to/workspace/manifest.json
 # Initialize — bridge detects manifest automatically
-python bridge.py --workspace /path/to/workspace init
+./bridge.py --workspace /path/to/workspace init
 ```
 
 ### Step 4: Read Your Operational Manual
@@ -164,22 +164,22 @@ Open `SKILL.md` and read it completely before operating.
 
 ```
 SESSION START:
-  → python bridge.py resume
+  → ./bridge.py resume
 
 BEFORE SIGNIFICANT TASKS:
-  → python bridge.py consult --context "description of task"
+  → ./bridge.py consult --context "description of task"
 
 AFTER EACH ACTION:
   → echo '{"action":"...","outcome":"...","success":"...","significance":"..."}' \
-    | python bridge.py report
+    | ./bridge.py report
   → If reflection_needed: write the reflection, pipe to bridge.py reflect
 
 BEFORE COMPACTION / SESSION END:
-  → python bridge.py flush
+  → ./bridge.py flush
   → Write working-state files from the returned prompts
 
 PERIODIC (daily/weekly):
-  → python bridge.py synthesize
+  → ./bridge.py synthesize
   → Review stale_artifacts list, prune as appropriate
   → Write synthesis report from the returned data
 ```
@@ -209,7 +209,7 @@ Nothing important is destroyed.
 To confirm your installation is working correctly:
 
 ```bash
-python test_ucs.py
+python3 test_ucs.py
 ```
 
 Expected output: `SUMMARY: 16/16 passed`

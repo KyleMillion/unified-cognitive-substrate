@@ -31,11 +31,10 @@ echo ""
 # ---- Check Python ----
 info "Checking Python version..."
 if ! command -v python3 &> /dev/null; then
-    if ! command -v python &> /dev/null; then
-        err "Python 3.10+ is required but not found."
-        exit 1
-    fi
-    PYTHON="python"
+    echo "python3 is required (Python >= 3.10). Install python3."
+    exit 1
+fi
+PYTHON="python3"
 else
     PYTHON="python3"
 fi

@@ -53,32 +53,32 @@ own routing. The bridge exposes this through 8 operations you call via `exec`.
 
 ```
 SESSION START
-  └── exec("python bridge.py resume")
+  └── exec("./bridge.py resume")
       → Read the session briefing, inject into your context
 
 BEFORE ACTING (significant tasks)
-  └── exec("python bridge.py consult --context 'task description'")
+  └── exec("./bridge.py consult --context 'task description'")
       → Factor the advisory into your reasoning (it suggests, not commands)
 
 AFTER EACH ACTION
   └── echo '{"action":"...","outcome":"...","success":"...","significance":"..."}' |
-      exec("python bridge.py report")
+      exec("./bridge.py report")
       → If result.reflection_needed == true → write the reflection
 
 WHEN REFLECTING
   └── echo '{"type":"post_task","text":"...","capabilities":[...],"keywords":[...]}' |
-      exec("python bridge.py reflect")
+      exec("./bridge.py reflect")
 
 BEFORE COMPACTION / SESSION END
-  └── exec("python bridge.py flush")
+  └── exec("./bridge.py flush")
       → Write working-state files from the prompts it returns
 
 PERIODIC (daily/weekly)
-  └── exec("python bridge.py synthesize")
+  └── exec("./bridge.py synthesize")
       → Write synthesis report from the data it returns
 
 QUICK CHECK
-  └── exec("python bridge.py status")
+  └── exec("./bridge.py status")
       → Includes stale_artifact_count in v1.1+
 ```
 
@@ -329,7 +329,7 @@ bridge and kernel code.
 ## First-Time Setup
 
 ```bash
-python bridge.py init [--workspace /path/to/workspace]
+./bridge.py init [--workspace /path/to/workspace]
 ```
 
 For a custom manifest deployment:
@@ -339,7 +339,7 @@ mkdir -p /path/to/workspace
 # Drop manifest.json in workspace root
 cp my_manifest.json /path/to/workspace/manifest.json
 # Initialize — bridge detects manifest automatically
-python bridge.py --workspace /path/to/workspace init
+./bridge.py --workspace /path/to/workspace init
 ```
 
 Default workspace: `~/.ucs`
