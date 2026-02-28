@@ -1,3 +1,28 @@
+# Unified Cognitive Substrate (UCS) v1.2
+**Closes the Judgment Gap in Persistent AI Agents**
+
+Toroidal routing engine + separated context energy field + Emergent Judgment Protocol + reflect/flush/resume loop.
+
+**Live Landing Page**
+https://kylemillion.github.io/unified-cognitive-substrate/ucs/
+
+**Paper**
+https://doi.org/10.5281/zenodo.18794692
+
+**Validation**
+[VALIDATION.md](VALIDATION.md) — 17/17 tests, 3-phase investigation, compaction survival
+
+**Start Here (run in <2 min)**
+```bash
+python -m pytest tests/test_ucs.py -q --tb=no
+```
+
+17/17 tests pass • 1,563× advisory differentiation • <100 ms boot  
+First public release: February 27, 2026  
+Built by **William Kyle Million (~K¹)**, IntuiTek¹ • MIT License
+
+---
+
 # Unified Cognitive Substrate (UCS)
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18794175.svg)](https://doi.org/10.5281/zenodo.18794175)
