@@ -60,12 +60,12 @@ Full experiment data, including negative results: [`experiments/`](experiments/)
 
 ```bash
 # Run the test suite
-cd tests && python test_ucs.py
+cd tests && python3 test_ucs.py
 
 # Run the validation experiments
-cd experiments && python torus_vs_baseline.py    # Phase 1: 6 experiments
-cd experiments && python postfix_experiments.py  # Phase 2: delta fix
-cd experiments && python option_b_test.py        # Phase 3: the fix that works
+cd experiments && python3 torus_vs_baseline.py    # Phase 1: 6 experiments
+cd experiments && python3 postfix_experiments.py  # Phase 2: delta fix
+cd experiments && python3 option_b_test.py        # Phase 3: the fix that works
 ```
 
 For agent integration, see [`docs/SKILL.md`](docs/SKILL.md) (operational manual) and [`docs/AGENT_README.md`](docs/AGENT_README.md) (self-constructing directive for AI agents).

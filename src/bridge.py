@@ -1219,7 +1219,7 @@ class UCSBridge:
             return {
                 "status": "not_initialized",
                 "message": "No UCS state found. Run 'init' first.",
-                "command": f"python bridge.py init --workspace {self.config.workspace_root}",
+                "command": f"python3 bridge.py init --workspace {self.config.workspace_root}",
             }
 
         eng = self._load_engine()

@@ -196,7 +196,7 @@ never touches `torusfield_kernel.py` directly.
 **Purpose:** First-time setup. Creates workspace, bootstraps Torusfield with
 the capability manifest, runs initial warm-up, creates empty knowledge files.
 
-**CLI:** `python bridge.py init [--workspace PATH] [--manifest aegis|PATH]`
+**CLI:** `./bridge.py init [--workspace PATH] [--manifest aegis|PATH]`
 
 **Process:**
 1. Create workspace directory tree
@@ -217,7 +217,7 @@ unless `--force` is passed.
 **Purpose:** Before acting. Agent passes current context, receives routing
 advisory plus relevant methodology.
 
-**CLI:** `python bridge.py consult --context "description" [--capabilities cap1,cap2,...]`
+**CLI:** `./bridge.py consult --context "description" [--capabilities cap1,cap2,...]`
 
 **Process:**
 1. Load engine from `torusfield_state.json`
@@ -273,7 +273,7 @@ advisory plus relevant methodology.
 **Purpose:** After acting. Agent reports what it did and what happened. Bridge
 reinforces the torus, checks for artifacts, triggers reflections.
 
-**CLI:** `echo '{"action":"web_search","outcome":"found 3 pages","success":"success","significance":"notable"}' | python bridge.py report`
+**CLI:** `echo '{"action":"web_search","outcome":"found 3 pages","success":"success","significance":"notable"}' | ./bridge.py report`
 
 **Input fields:**
 - `action` (required): Capability name the agent used
@@ -320,13 +320,13 @@ reinforces the torus, checks for artifacts, triggers reflections.
 **Purpose:** Agent stores a reflection (post-task, artifact annotation, or
 experiment log entry). Bridge indexes it for future retrieval.
 
-**CLI:** `echo '{"type":"post_task","text":"### 2026-02-25 — Competitor pricing research\n...","capabilities":["web_search","web_fetch"],"keywords":["pricing","evidence"]}' | python bridge.py reflect`
+**CLI:** `echo '{"type":"post_task","text":"### 2026-02-25 — Competitor pricing research\n...","capabilities":["web_search","web_fetch"],"keywords":["pricing","evidence"]}' | ./bridge.py reflect`
 
 Or for artifact annotation:
-`echo '{"type":"annotation","artifact_id":"a3f2c8b1","text":"This wormhole works because...","failure_condition":"Does not apply to API docs"}' | python bridge.py reflect`
+`echo '{"type":"annotation","artifact_id":"a3f2c8b1","text":"This wormhole works because...","failure_condition":"Does not apply to API docs"}' | ./bridge.py reflect`
 
 Or for experiment:
-`echo '{"type":"experiment","text":"### 2026-02-25 — Changed warmup steps\n..."}' | python bridge.py reflect`
+`echo '{"type":"experiment","text":"### 2026-02-25 — Changed warmup steps\n..."}' | ./bridge.py reflect`
 
 **Process:**
 1. Parse reflection type
@@ -345,7 +345,7 @@ Or for experiment:
 **Purpose:** Pre-compaction save. Exports all Torusfield state AND returns
 EJ externalization prompts for the agent to fill.
 
-**CLI:** `python bridge.py flush`
+**CLI:** `./bridge.py flush`
 
 **Process:**
 1. Load engine, export full state to torusfield_state.json
@@ -379,7 +379,7 @@ The agent then writes its working-state files. No second call needed — on
 **Purpose:** Session start. Loads all persisted state, runs health check,
 returns session briefing.
 
-**CLI:** `python bridge.py resume`
+**CLI:** `./bridge.py resume`
 
 **Process:**
 1. Load engine from torusfield_state.json, import state
@@ -417,7 +417,7 @@ returns session briefing.
 it. The agent (LLM) does the actual synthesis reasoning — the bridge provides
 the data.
 
-**CLI:** `python bridge.py synthesize`
+**CLI:** `./bridge.py synthesize`
 
 **Process:**
 1. Load engine state + ok_report
@@ -439,7 +439,7 @@ optionally calls `reflect --type synthesis` to store it.
 
 **Purpose:** Quick health check without full resume briefing.
 
-**CLI:** `python bridge.py status`
+**CLI:** `./bridge.py status`
 
 **Output:** PP vector, health score, artifact count, cursor position, last
 action timestamp, unannotated count.
@@ -617,28 +617,28 @@ The agent's runtime loop with UCS becomes:
 
 ```
 SESSION START:
-  briefing = exec("python bridge.py resume")
+  briefing = exec("./bridge.py resume")
   → inject briefing into context
 
 ON USER REQUEST:
-  advisory = exec("python bridge.py consult --context '...'")
+  advisory = exec("./bridge.py consult --context '...'")
   → factor advisory into reasoning
   → select and execute action using own judgment
 
 AFTER EACH ACTION:
-  result = exec("echo '{...}' | python bridge.py report")
+  result = exec("echo '{...}' | ./bridge.py report")
   → if result.reflection_needed:
       → reason about the reflection prompts
-      → exec("echo '{...}' | python bridge.py reflect")
+      → exec("echo '{...}' | ./bridge.py reflect")
 
 BEFORE COMPACTION:
-  prompts = exec("python bridge.py flush")
+  prompts = exec("./bridge.py flush")
   → write working-state files based on prompts
 
 PERIODIC:
-  data = exec("python bridge.py synthesize")
+  data = exec("./bridge.py synthesize")
   → write synthesis report from data
-  → exec("echo '{...}' | python bridge.py reflect --type synthesis")
+  → exec("echo '{...}' | ./bridge.py reflect --type synthesis")
 ```
 
 ---
