@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "UCS v1.2 — Judgment Preservation in Persistent AI Agents"
+authors:
+  - family-names: "Million"
+    given-names: "W. Kyle"
+    affiliation: "IntuiTek¹"
+date-released: "2026-02-28"
+url: "https://github.com/KyleMillion/unified-cognitive-substrate#judgment-preservation"
+abstract: >-
+  UCS v1.2 (Toroidal Routing Engine + Emergent Judgment Protocol) is a framework for
+  preserving emergent judgment in persistent AI agents across resets and compactions.

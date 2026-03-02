@@ -1,0 +1,1 @@
+W. Kyle Million is the founder of IntuiTek¹ and the author of UCS v1.2 (Toroidal Routing Engine + Emergent Judgment Protocol), focused on practical persistence and judgment continuity in tool-using AI agents.
