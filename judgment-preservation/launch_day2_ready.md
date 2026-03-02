@@ -29,3 +29,5 @@ https://github.com/KyleMillion/unified-cognitive-substrate/tree/main/judgment-pr
 
 6/ Paper (Zenodo DOI):
 https://doi.org/10.5281/zenodo.18794692
+
+7/ Personal note: I'm building this in the margins—between dad duties and real life—so my bar is simple: reliability that survives interruptions.
