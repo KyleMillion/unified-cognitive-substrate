@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                UNIFIED COGNITIVE SUBSTRATE (UCS) BRIDGE v1.0               ║
-║          Torusfield OS + Emergent Judgment — Fused Integration Layer        ║
+║                UNIFIED COGNITIVE SUBSTRATE (UCS) BRIDGE v2.0               ║
+║    Torusfield OS + Emergent Judgment + Judgment Preservation Layer          ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  Architecture:  William Kyle Million (~K¹) + Claude (Anthropic)            ║
 ║  License:       MIT                                                        ║
@@ -19,8 +19,9 @@
 ║  reasoning texture that develops through experience and is destroyed by    ║
 ║  compaction.                                                               ║
 ║                                                                            ║
-║  The bridge exposes 8 operations:                                          ║
-║    init, consult, report, reflect, flush, resume, synthesize, status       ║
+║  The bridge exposes 10 operations:                                         ║
+║    init, consult, report, reflect, flush, resume, synthesize, status,      ║
+║    export, import                                                          ║
 ║                                                                            ║
 ║  The agent reads SKILL.md, calls bridge.py via exec, and receives JSON.    ║
 ║  The agent stays in control. The bridge advises.                           ║
@@ -83,6 +84,10 @@ class UCSConfig:
     workspace_root: Path = field(default_factory=lambda: Path.home() / ".ucs")
     manifest_path: Optional[Path] = None  # None = use Aegis embedded manifest
 
+    # v2.0: Multi-agent support
+    agent_id: str = "default"                      # identifies the producing agent
+    shared_substrate_path: Optional[Path] = None   # cross-agent shared index
+
     # Tuning
     theta_warmup_steps: int = 15          # θ-steps on consult to diffuse energy
     phi_report_interval: int = 5          # reports between φ-cycles
@@ -93,6 +98,12 @@ class UCSConfig:
     advisory_top_n: int = 6              # top N paths in consult advisory
     consult_energy_magnitude: float = 1.5 # energy injected per matched capability
     report_energy_magnitude: float = 1.0  # energy injected on action report
+
+    # v2.0: Penalty and temporal tuning
+    penalty_weight: float = 0.75          # epsilon: negative knowledge routing penalty
+    temporal_decay_rate: float = 0.01     # methodology scoring half-life ~100 days
+    structural_similarity_weight: float = 10.0  # routing-state match bonus in methodology search
+    judgment_node_weight: float = 5.0     # judgment node match bonus in methodology search
 
     # Reward model
     reward_base: Dict[str, float] = field(default_factory=lambda: {
@@ -291,10 +302,11 @@ class AnnotationStore:
     """
 
     EMPTY_INDEX = {
-        "version": "ucs.v1.0",
+        "version": "ucs.v2.0",
         "annotations": {},
         "methodology_entries": [],
         "dead_end_entries": [],
+        "judgment_nodes": [],            # v2.0: unified J = (C, M, N, O)
         "report_counter": 0,
         "last_phi_t": 0,
         "last_synthesis_date": None,
@@ -337,23 +349,111 @@ class AnnotationStore:
         return entry_id
 
     def search_methodology(
-        self, keywords: List[str], capabilities: List[str], max_results: int = 5
+        self, keywords: List[str], capabilities: List[str],
+        max_results: int = 5,
+        routing_state: Optional[Dict] = None,
+        temporal_decay_rate: float = 0.01,
+        structural_weight: float = 10.0,
     ) -> List[Dict]:
+        """Search methodology with keyword matching, temporal decay, and
+        structural routing-state similarity (v2.0).
+
+        Three scoring layers:
+        1. Keyword + capability overlap (original)
+        2. Temporal decay — recent entries weighted higher
+        3. Structural similarity — routing state topology matching
+        """
         results = []
         kw_set = {w.lower() for w in keywords}
         cap_set = set(capabilities)
+        now = datetime.now(timezone.utc)
 
         for entry in self.data["methodology_entries"]:
-            score = 0
+            score = 0.0
+
+            # Layer 1: keyword/capability overlap
             entry_kw = {w.lower() for w in entry.get("keywords", [])}
             entry_caps = set(entry.get("capabilities", []))
             score += len(kw_set & entry_kw) * 2
             score += len(cap_set & entry_caps) * 3
-            if score > 0:
-                results.append((score, entry))
+
+            if score <= 0:
+                continue
+
+            # Layer 2: temporal decay — half-life = 1/rate days
+            entry_date = entry.get("date", "")
+            if entry_date and temporal_decay_rate > 0:
+                try:
+                    entry_dt = datetime.fromisoformat(entry_date + "T00:00:00+00:00")
+                    age_days = max((now - entry_dt).days, 0)
+                    decay = 1.0 / (1.0 + temporal_decay_rate * age_days)
+                    score *= decay
+                except (ValueError, TypeError):
+                    pass
+
+            # Layer 3: structural similarity — routing state topology matching
+            if routing_state and "routing_snapshot" in entry:
+                sim = self._structural_similarity(
+                    routing_state, entry["routing_snapshot"])
+                score += structural_weight * sim
+
+            results.append((score, entry))
 
         results.sort(key=lambda x: -x[0])
         return [r[1] for r in results[:max_results]]
+
+    @staticmethod
+    def _structural_similarity(current: Dict, historical: Dict) -> float:
+        """Compute structural similarity between two routing states.
+
+        Compares: cursor position, top path overlap, context energy
+        distribution, and active artifact overlap. Returns [0.0, 1.0].
+
+        This is the "pattern of the pattern" — when the current cognitive
+        topology matches a historical cognitive topology, the methodology
+        from that history is structurally the right match.
+        """
+        score = 0.0
+        components = 0
+
+        # Cursor match (same starting position = same decision context)
+        if current.get("cursor") and historical.get("cursor"):
+            components += 1
+            if current["cursor"] == historical["cursor"]:
+                score += 1.0
+
+        # Top path overlap (same outgoing edge structure)
+        cur_paths = set(p.get("to", "") for p in current.get("top_paths", []))
+        hist_paths = set(p.get("to", "") for p in historical.get("top_paths", []))
+        if cur_paths and hist_paths:
+            components += 1
+            overlap = len(cur_paths & hist_paths)
+            union = len(cur_paths | hist_paths) or 1
+            score += overlap / union  # Jaccard similarity
+
+        # Context energy correlation (same capabilities being energized)
+        cur_energy = current.get("context_energy", {})
+        hist_energy = historical.get("context_energy", {})
+        if cur_energy and hist_energy:
+            components += 1
+            all_keys = set(cur_energy) | set(hist_energy)
+            if all_keys:
+                # Cosine-like: proportion of shared energy targets
+                shared = set(k for k in cur_energy if cur_energy[k] > 0.01)
+                shared &= set(k for k in hist_energy if hist_energy[k] > 0.01)
+                score += len(shared) / len(all_keys)
+
+        # Active artifact overlap (same structural patterns active)
+        cur_arts = set(current.get("active_artifacts", []))
+        hist_arts = set(historical.get("active_artifacts", []))
+        if cur_arts or hist_arts:
+            components += 1
+            if cur_arts and hist_arts:
+                overlap = len(cur_arts & hist_arts)
+                union = len(cur_arts | hist_arts) or 1
+                score += overlap / union
+
+        return score / max(components, 1)
 
     def recent_methodology(self, n: int = 5) -> List[Dict]:
         return self.data["methodology_entries"][-n:]
@@ -367,20 +467,144 @@ class AnnotationStore:
         return entry_id
 
     def search_dead_ends(
-        self, keywords: List[str], capabilities: List[str], max_results: int = 3
+        self, keywords: List[str], capabilities: List[str],
+        max_results: int = 3,
+        context_for_reopen: Optional[str] = None,
+        temporal_decay_rate: float = 0.01,
     ) -> List[Dict]:
+        """Search dead ends with temporal decay and reopen condition
+        evaluation (v2.0).
+
+        When context matches a dead end's reopen conditions, the entry is
+        flagged with _reopen_triggered=True rather than being suppressed.
+        This lets the agent know a previously closed avenue may warrant
+        re-investigation.
+        """
         results = []
         kw_set = {w.lower() for w in keywords}
         cap_set = set(capabilities)
+        now = datetime.now(timezone.utc)
 
         for entry in self.data["dead_end_entries"]:
-            score = 0
+            score = 0.0
             entry_kw = {w.lower() for w in entry.get("keywords", [])}
             entry_caps = set(entry.get("capabilities", []))
             score += len(kw_set & entry_kw) * 2
             score += len(cap_set & entry_caps) * 3
+
+            # Reopen condition evaluation — can independently surface dead ends
+            # even when keyword overlap is zero, because the whole point of
+            # reopen conditions is to catch when circumstances change.
+            reopen_match = False
+            reopen = entry.get("reopen_conditions", "").lower()
+            if context_for_reopen and reopen:
+                reopen_words = set(re.findall(r"[a-z_]{3,}", reopen))
+                context_words_set = set(re.findall(r"[a-z_]{3,}", context_for_reopen.lower()))
+                overlap = reopen_words & context_words_set
+                if overlap:
+                    reopen_match = True
+                    entry = dict(entry)  # shallow copy to avoid mutating index
+                    entry["_reopen_triggered"] = True
+                    entry["_reopen_matched_words"] = sorted(overlap)
+                    # Reopen match provides independent scoring
+                    if score <= 0:
+                        score = len(overlap) * 1.5
+
+            if score <= 0:
+                continue
+
+            # Temporal decay
+            entry_date = entry.get("date", "")
+            if entry_date and temporal_decay_rate > 0:
+                try:
+                    entry_dt = datetime.fromisoformat(entry_date + "T00:00:00+00:00")
+                    age_days = max((now - entry_dt).days, 0)
+                    decay = 1.0 / (1.0 + temporal_decay_rate * age_days)
+                    score *= decay
+                except (ValueError, TypeError):
+                    pass
+
+            results.append((score, entry))
+
+        results.sort(key=lambda x: -x[0])
+        return [r[1] for r in results[:max_results]]
+
+    # -- Judgment Nodes (v2.0) --
+
+    def add_judgment_node(self, node: Dict) -> str:
+        """Store a unified judgment node: J = (C, M, N, O).
+
+        A judgment node captures the complete cognitive state of a decision:
+        - context: constraints, knowns, routing state at decision time
+        - methodology: the reasoning pattern applied
+        - negative_knowledge: what was considered and rejected
+        - outcome: the action taken and its result
+        - routing_snapshot: the structural fingerprint of the routing graph
+
+        This is the atomic unit that enables "pattern of the pattern" retrieval.
+        """
+        nodes = self.data.setdefault("judgment_nodes", [])
+        node_id = _sha256(_stable_json(node))[:12]
+        node["id"] = node_id
+        nodes.append(node)
+        # Keep last 2000 judgment nodes
+        if len(nodes) > 2000:
+            self.data["judgment_nodes"] = nodes[-2000:]
+        return node_id
+
+    def search_judgment_nodes(
+        self, keywords: List[str], capabilities: List[str],
+        routing_state: Optional[Dict] = None,
+        max_results: int = 5,
+        temporal_decay_rate: float = 0.01,
+        structural_weight: float = 10.0,
+    ) -> List[Dict]:
+        """Search judgment nodes by keyword, capability, routing state, and time.
+
+        This is the core retrieval mechanism for the "pattern of the pattern":
+        when the current routing topology matches a historical judgment node's
+        routing topology, the reasoning that produced that judgment is
+        structurally the right match for the current situation.
+        """
+        results = []
+        kw_set = {w.lower() for w in keywords}
+        cap_set = set(capabilities)
+        now = datetime.now(timezone.utc)
+
+        for node in self.data.get("judgment_nodes", []):
+            score = 0.0
+
+            # Keyword matching against context + methodology text
+            node_kw = {w.lower() for w in node.get("keywords", [])}
+            score += len(kw_set & node_kw) * 2
+
+            # Capability matching
+            node_caps = set(node.get("capabilities", []))
+            score += len(cap_set & node_caps) * 3
+
+            if score <= 0 and not routing_state:
+                continue
+
+            # Temporal decay
+            node_date = node.get("date", "")
+            if node_date and temporal_decay_rate > 0:
+                try:
+                    node_dt = datetime.fromisoformat(node_date + "T00:00:00+00:00")
+                    age_days = max((now - node_dt).days, 0)
+                    decay = 1.0 / (1.0 + temporal_decay_rate * age_days)
+                    score *= decay
+                except (ValueError, TypeError):
+                    pass
+
+            # Structural similarity (the "pattern of the pattern")
+            if routing_state and "routing_snapshot" in node:
+                sim = self._structural_similarity(
+                    routing_state, node["routing_snapshot"])
+                # Structural match can pull in nodes even with low keyword score
+                score += structural_weight * sim
+
             if score > 0:
-                results.append((score, entry))
+                results.append((score, node))
 
         results.sort(key=lambda x: -x[0])
         return [r[1] for r in results[:max_results]]
@@ -624,12 +848,15 @@ class UCSBridge:
     # ----- Outgoing edge scoring -----
 
     def _score_edges(self, eng: TorusfieldEngine, src: str,
-                     context_energy: Optional[Dict[str, float]] = None
+                     context_energy: Optional[Dict[str, float]] = None,
+                     penalty_energy: Optional[Dict[str, float]] = None,
                      ) -> List[Dict]:
         """Score all outgoing edges from src node, sorted by score descending.
-        
+
         v1.2: If context_energy is provided, includes delta * energy_at_dst
         in scoring, producing context-sensitive advisory.
+        v2.0: If penalty_energy is provided, subtracts epsilon * penalty_at_dst,
+        mathematically suppressing paths toward known-bad destinations.
         """
         candidates = eng.graph.adj.get(src, [])
         scored = []
@@ -644,7 +871,11 @@ class UCSBridge:
             ctx_boost = 0.0
             if context_energy:
                 ctx_boost = eng.router.delta * context_energy.get(e.dst, 0.0)
-            score = base_score + ctx_boost
+            # v2.0: Negative knowledge penalty
+            penalty = 0.0
+            if penalty_energy:
+                penalty = eng.router.epsilon * penalty_energy.get(e.dst, 0.0)
+            score = base_score + ctx_boost - penalty
 
             annotation = None
             # Check all artifacts for wormholes on this edge
@@ -660,6 +891,7 @@ class UCSBridge:
                 "edge_index": eidx,
                 "score": round(score, 4),
                 "context_boost": round(ctx_boost, 4),
+                "penalty": round(penalty, 4),
                 "components": {
                     "utility": round(e.u, 3),
                     "cost": round(-e.c, 3),
@@ -667,6 +899,7 @@ class UCSBridge:
                     "novelty": round(e.n, 3),
                     "bias": round(bias, 3),
                     "context_energy": round(ctx_boost, 3),
+                    "penalty": round(penalty, 3),
                 },
                 "annotation": annotation,
             })
@@ -703,6 +936,63 @@ class UCSBridge:
             entry["annotated"] = ann is not None
             enriched.append(entry)
         return enriched
+
+    # ----- v2.0: Routing state capture -----
+
+    def _capture_routing_snapshot(
+        self, eng: TorusfieldEngine,
+        cursor: str, top_paths: List[Dict],
+        context_energy: Dict[str, float],
+        wormholes: List[Dict], attractors: List[Dict],
+    ) -> Dict:
+        """Capture a structural fingerprint of the current routing state.
+
+        This snapshot is stored alongside methodology entries and judgment
+        nodes so that future consult() calls can match the current routing
+        topology against historical topologies — the "pattern of the pattern."
+        """
+        return {
+            "cursor": cursor,
+            "top_paths": [
+                {"to": p.get("to", ""), "score": p.get("score", 0)}
+                for p in top_paths[:5]
+            ],
+            "context_energy": {
+                k: round(v, 4) for k, v in context_energy.items()
+                if v > 0.01
+            } if context_energy else {},
+            "active_artifacts": (
+                [w.get("id", "") for w in wormholes[:3]] +
+                [a.get("id", "") for a in attractors[:3]]
+            ),
+            "t": eng.state.t,
+        }
+
+    # ----- v2.0: Penalty energy from dead ends -----
+
+    def _prepare_penalty_energy(
+        self, eng: TorusfieldEngine, dead_ends: List[Dict],
+    ) -> Dict[str, float]:
+        """Convert matched dead ends into routing penalty energy.
+
+        Each dead end's associated capabilities receive penalty energy
+        proportional to the configured penalty_weight. This creates
+        Gemini's γ·f_collision(N_curr, N_hist) — dead ends mathematically
+        suppress routing toward known-bad destinations.
+        """
+        penalty_map: Dict[str, float] = {}
+        for de in dead_ends:
+            # Dead ends matched by search_dead_ends always have capabilities
+            caps = de.get("capabilities", [])
+            keywords = de.get("keywords", [])
+            # Map keywords to capabilities through the keyword map
+            for kw in keywords:
+                if kw in _KEYWORD_MAP:
+                    caps = caps + _KEYWORD_MAP[kw]
+            for cap in set(caps):
+                if cap in eng.node_coords:
+                    penalty_map[cap] = penalty_map.get(cap, 0.0) + 1.0
+        return penalty_map
 
     # ================================================================
     # OPERATIONS
@@ -797,25 +1087,49 @@ class UCSBridge:
             eng.state.decay(eng.leak_decay)
             eng._run_injections()
 
-        # Score outgoing edges from cursor WITH context energy
-        cursor = eng.cursor_node
-        paths = self._score_edges(eng, cursor, context_energy=context_energy_map)
-        top_paths = paths[:self.config.advisory_top_n]
-
-        # Active wormholes
+        # Active wormholes + attractors (needed for routing state capture)
         wormholes = self._enrich_artifacts(eng, "wormhole", limit=5)
-
-        # Active attractors
         attractors = self._enrich_artifacts(eng, "attractor", limit=3)
 
-        # Search methodology index
+        # Search dead ends (with reopen condition evaluation)
+        cursor = eng.cursor_node
         context_words = list(set(re.findall(r"[a-z_]{3,}", context.lower())))
-        meth_hits = self.index.search_methodology(
-            context_words, resolved_caps, self.config.max_methodology_hits)
-
-        # Search dead ends
         dead_hits = self.index.search_dead_ends(
-            context_words, resolved_caps, self.config.max_dead_end_hits)
+            context_words, resolved_caps, self.config.max_dead_end_hits,
+            context_for_reopen=context,
+            temporal_decay_rate=self.config.temporal_decay_rate)
+
+        # v2.0: Compute penalty energy from matched dead ends —
+        # mathematically suppress routing toward known-bad destinations
+        penalty_energy = self._prepare_penalty_energy(eng, dead_hits)
+
+        # Score outgoing edges from cursor WITH context energy AND penalty
+        paths = self._score_edges(eng, cursor,
+                                  context_energy=context_energy_map,
+                                  penalty_energy=penalty_energy)
+        top_paths = paths[:self.config.advisory_top_n]
+
+        # v2.0: Capture routing state snapshot — the structural fingerprint
+        # of the current cognitive topology. Used for "pattern of the pattern"
+        # matching when searching methodology and judgment nodes.
+        routing_state = self._capture_routing_snapshot(
+            eng, cursor, top_paths, context_energy_map,
+            wormholes, attractors)
+
+        # Search methodology index (with temporal decay + structural matching)
+        meth_hits = self.index.search_methodology(
+            context_words, resolved_caps, self.config.max_methodology_hits,
+            routing_state=routing_state,
+            temporal_decay_rate=self.config.temporal_decay_rate,
+            structural_weight=self.config.structural_similarity_weight)
+
+        # v2.0: Search judgment nodes (pattern of the pattern retrieval)
+        judgment_hits = self.index.search_judgment_nodes(
+            context_words, resolved_caps,
+            routing_state=routing_state,
+            max_results=self.config.max_methodology_hits,
+            temporal_decay_rate=self.config.temporal_decay_rate,
+            structural_weight=self.config.structural_similarity_weight)
 
         # Open questions from last working state
         open_q = []
@@ -851,9 +1165,27 @@ class UCSBridge:
             "dead_ends": [
                 {"topic": e.get("topic", ""), "why_closed": e.get("why_closed", ""),
                  "date": e.get("date", ""),
-                 "reopen_conditions": e.get("reopen_conditions", "")}
+                 "reopen_conditions": e.get("reopen_conditions", ""),
+                 "reopen_triggered": e.get("_reopen_triggered", False),
+                 "reopen_matched": e.get("_reopen_matched_words", [])}
                 for e in dead_hits
             ],
+            # v2.0: Judgment node matches (the meta-pattern retrieval)
+            "judgment_hits": [
+                {"id": j.get("id", ""),
+                 "action": j.get("action", ""),
+                 "methodology_summary": j.get("methodology_summary", ""),
+                 "negative_knowledge": j.get("negative_knowledge", ""),
+                 "outcome_success": j.get("outcome_success", ""),
+                 "date": j.get("date", "")}
+                for j in judgment_hits
+            ],
+            "penalty_applied": {
+                cap: round(energy, 4)
+                for cap, energy in sorted(
+                    penalty_energy.items(), key=lambda x: -x[1])
+                if energy > 0.01
+            } if penalty_energy else {},
             "pp_health": round(pp_health, 4),
             "unannotated_count": len(unannotated),
             "open_questions": open_q,
@@ -869,7 +1201,8 @@ class UCSBridge:
     def op_report(self, action: str, outcome: str,
                   success: str = "neutral",
                   significance: str = "routine",
-                  context: str = "") -> Dict:
+                  context: str = "",
+                  reasoning_trace: Optional[Dict] = None) -> Dict:
         """
         After acting. Reinforces the torus, checks for artifacts,
         triggers reflections if warranted.
@@ -1064,8 +1397,8 @@ class UCSBridge:
                 for aid in unannotated[:3]
             ]
 
-        # Action log
-        self.action_log.append({
+        # Action log — v2.0: includes reasoning trace when provided
+        log_entry = {
             "t": eng.state.t,
             "timestamp": _now_iso(),
             "action": action,
@@ -1077,7 +1410,59 @@ class UCSBridge:
             "cursor_before": cursor_before,
             "cursor_after": action,
             "routed": routed,
-        })
+        }
+        if reasoning_trace:
+            log_entry["reasoning"] = reasoning_trace
+        self.action_log.append(log_entry)
+
+        # v2.0: Create judgment node when reasoning trace is provided
+        # or when significance warrants it. This unifies C, M, N, O
+        # into a single searchable unit — the atomic element of
+        # "pattern of the pattern" retrieval.
+        if reasoning_trace or significance in ("notable", "critical"):
+            # Capture routing state at time of judgment
+            top_paths = self._score_edges(eng, action)[:5]
+            judgment_routing = self._capture_routing_snapshot(
+                eng, action, top_paths, {}, [], [])
+
+            # Extract keyword material from context + outcome + reasoning
+            jn_text = f"{context} {outcome}"
+            if reasoning_trace:
+                jn_text += " " + " ".join(
+                    str(v) for v in reasoning_trace.values() if isinstance(v, str))
+            jn_keywords = list(set(re.findall(r"[a-z_]{3,}", jn_text.lower())))
+
+            judgment_node = {
+                "date": _today_str(),
+                "timestamp": _now_iso(),
+                "agent_id": self.config.agent_id,
+                # C — Context: constraints, knowns, routing state at decision time
+                "context": {
+                    "task_description": context,
+                    "cursor_before": cursor_before,
+                    "constraints": reasoning_trace.get("constraints") if reasoning_trace else None,
+                },
+                # M — Methodology: the reasoning pattern applied
+                "methodology_summary": (
+                    reasoning_trace.get("decisive_factor", "")
+                    if reasoning_trace else outcome[:200]),
+                # N — Negative Knowledge: what was considered and rejected
+                "negative_knowledge": (
+                    reasoning_trace.get("alternatives", "")
+                    if reasoning_trace else ""),
+                # O — Outcome: the action and its result
+                "action": action,
+                "outcome": outcome,
+                "outcome_success": success,
+                "significance": significance,
+                "reward": round(reward, 4),
+                # Structural fingerprint
+                "routing_snapshot": judgment_routing,
+                "capabilities": [action],
+                "keywords": jn_keywords[:30],  # cap to prevent bloat
+            }
+            node_id = self.index.add_judgment_node(judgment_node)
+            result["judgment_node_id"] = node_id
 
         self._save_engine()
         self.index.save()
@@ -1091,6 +1476,10 @@ class UCSBridge:
                    **extra) -> Dict:
         """
         Store a reflection. Types: post_task, annotation, experiment, dead_end, synthesis.
+
+        v2.0: post_task reflections now capture a routing state snapshot,
+        enabling structural pattern matching in future consult() calls.
+        Entries are tagged with agent_id for multi-agent support.
         """
         self.index.load()
         today = _today_str()
@@ -1099,14 +1488,31 @@ class UCSBridge:
         if reflection_type == "post_task":
             # Append to methodology.md
             _append_md(self.config.methodology_path, text)
-            # Index it
-            entry_id = self.index.add_methodology_entry({
+
+            # v2.0: Capture routing state snapshot at reflection time
+            routing_snapshot = None
+            try:
+                eng = self._load_engine()
+                top_paths = self._score_edges(eng, eng.cursor_node)[:5]
+                wormholes = self._enrich_artifacts(eng, "wormhole", limit=3)
+                attractors = self._enrich_artifacts(eng, "attractor", limit=3)
+                routing_snapshot = self._capture_routing_snapshot(
+                    eng, eng.cursor_node, top_paths, {}, wormholes, attractors)
+            except Exception:
+                pass  # routing snapshot is optional enrichment
+
+            # Index with routing state + agent tag
+            entry = {
                 "date": today,
                 "capabilities": capabilities or [],
                 "keywords": keywords or [],
                 "summary": text[:200].replace("\n", " "),
                 "source_type": "post_task",
-            })
+                "agent_id": self.config.agent_id,
+            }
+            if routing_snapshot:
+                entry["routing_snapshot"] = routing_snapshot
+            entry_id = self.index.add_methodology_entry(entry)
             result["entry_id"] = entry_id
             result["file"] = str(self.config.methodology_path)
 
@@ -1443,8 +1849,165 @@ class UCSBridge:
             "artifact_count": len(eng.store.artifacts),
             "unannotated_count": len(unannotated),
             "stale_artifact_count": len(stale),
+            "judgment_node_count": len(self.index.data.get("judgment_nodes", [])),
             "report_counter": self.index.report_counter,
             "last_synthesis": self.index.last_synthesis_date,
+            "agent_id": self.config.agent_id,
+        }
+
+    # ================================================================
+    # v2.0: PORTABLE COGNITIVE EXPORT / IMPORT
+    # ================================================================
+
+    def op_export(self) -> Dict:
+        """Export the complete cognitive state as a single portable package.
+
+        This is the explicit comprehension lock-in breaker. The entire
+        institutional memory — judgment nodes, methodology, dead ends,
+        learned routing weights, artifacts with annotations, PP health
+        history — is packaged into one self-contained JSON structure that
+        any UCS-compatible system can ingest.
+
+        The exported package contains everything needed to reconstruct
+        the agent's cognitive substrate on a different platform, with a
+        different underlying model, without losing the accumulated
+        understanding.
+        """
+        eng = self._load_engine()
+        self.index.load()
+        self.pp_history.load()
+
+        return {
+            "format": "ucs_cognitive_export_v2",
+            "exported_at": _now_iso(),
+            "agent_id": self.config.agent_id,
+            "schema_version": "2.0",
+
+            # The reasoning DNA — judgment nodes are the primary export
+            "judgment_nodes": self.index.data.get("judgment_nodes", []),
+
+            # Qualitative knowledge
+            "methodology": self.index.data.get("methodology_entries", []),
+            "dead_ends": self.index.data.get("dead_end_entries", []),
+
+            # Structural artifacts with annotations
+            "artifacts": {
+                aid: {
+                    "kind": a.kind,
+                    "payload": a.payload,
+                    "score": round(a.score, 4),
+                    "created_t": a.created_t,
+                    "annotation": self.index.get_annotation(aid),
+                }
+                for aid, a in eng.store.artifacts.items()
+            },
+
+            # Learned routing graph (the quantitative layer)
+            "routing_graph": {
+                "nodes": eng.graph.nodes,
+                "edges": [
+                    {
+                        "src": e.src, "dst": e.dst,
+                        "w": round(e.w, 6),
+                        "u": round(e.u, 4),
+                        "c": round(e.c, 4),
+                        "n": round(e.n, 4),
+                    }
+                    for e in eng.graph.edges
+                ],
+            },
+
+            # Policy biases (learned from artifacts)
+            "policy_biases": {
+                str(k): round(v, 6) for k, v in eng.policy.edge_bias.items()
+            },
+
+            # Operational health history
+            "pp_vector": {k: round(v, 4) for k, v in eng.pp.vector.items()},
+            "pp_health": round(eng.pp.health_score(), 4),
+            "pp_history": self.pp_history.data.get("snapshots", [])[-100:],
+
+            # Agent disagreements with graph (structural learning signal)
+            "policy_overrides": self.index.data.get("policy_overrides", []),
+
+            # Engine metadata
+            "engine_t": eng.state.t,
+            "cursor": eng.cursor_node,
+        }
+
+    def op_import(self, package: Dict) -> Dict:
+        """Import a cognitive export package into this substrate.
+
+        Merges the imported knowledge with any existing local knowledge.
+        Methodology entries, dead ends, and judgment nodes are appended.
+        Edge weights are blended (averaged) with existing weights.
+        Artifacts and annotations are merged by ID.
+
+        This enables:
+        - Migrating from one platform to another without knowledge loss
+        - Merging cognitive substrates from multiple agents
+        - Seeding a new agent with institutional memory from an experienced one
+        """
+        fmt = package.get("format", "")
+        if not fmt.startswith("ucs_cognitive_export"):
+            return {"error": f"Unknown export format: {fmt}"}
+
+        eng = self._load_engine()
+        self.index.load()
+
+        imported = {
+            "methodology": 0, "dead_ends": 0, "judgment_nodes": 0,
+            "artifacts": 0, "edges_blended": 0,
+        }
+
+        # Import methodology entries (append, deduplicate by ID)
+        existing_meth_ids = {e.get("id") for e in self.index.data.get("methodology_entries", [])}
+        for entry in package.get("methodology", []):
+            if entry.get("id") not in existing_meth_ids:
+                self.index.data.setdefault("methodology_entries", []).append(entry)
+                imported["methodology"] += 1
+
+        # Import dead ends (append, deduplicate by ID)
+        existing_de_ids = {e.get("id") for e in self.index.data.get("dead_end_entries", [])}
+        for entry in package.get("dead_ends", []):
+            if entry.get("id") not in existing_de_ids:
+                self.index.data.setdefault("dead_end_entries", []).append(entry)
+                imported["dead_ends"] += 1
+
+        # Import judgment nodes (append, deduplicate by ID)
+        existing_jn_ids = {n.get("id") for n in self.index.data.get("judgment_nodes", [])}
+        for node in package.get("judgment_nodes", []):
+            if node.get("id") not in existing_jn_ids:
+                self.index.data.setdefault("judgment_nodes", []).append(node)
+                imported["judgment_nodes"] += 1
+
+        # Import annotations (merge by artifact ID)
+        for aid, ann in package.get("artifacts", {}).items():
+            if ann.get("annotation") and not self.index.get_annotation(aid):
+                self.index.set_annotation(aid, ann["annotation"])
+                imported["artifacts"] += 1
+
+        # Blend edge weights (average imported weights with existing)
+        import_edges = package.get("routing_graph", {}).get("edges", [])
+        if import_edges:
+            # Build lookup: (src, dst) → imported weight
+            import_w = {(e["src"], e["dst"]): e["w"] for e in import_edges}
+            for e in eng.graph.edges:
+                key = (e.src, e.dst)
+                if key in import_w:
+                    old_w = e.w
+                    e.w = (e.w + import_w[key]) / 2.0  # blend
+                    if abs(e.w - old_w) > 0.001:
+                        imported["edges_blended"] += 1
+
+        self._save_engine()
+        self.index.save()
+
+        return {
+            "status": "imported",
+            "source_agent": package.get("agent_id", "unknown"),
+            "source_format": fmt,
+            "imported": imported,
         }
 
 
@@ -1522,6 +2085,12 @@ def main():
     # status
     sub.add_parser("status", help="Quick health check")
 
+    # export (v2.0)
+    sub.add_parser("export", help="Export complete cognitive state as portable package")
+
+    # import (v2.0)
+    sub.add_parser("import", help="Import cognitive export package (JSON on stdin)")
+
     args = parser.parse_args()
 
     # Config
@@ -1556,6 +2125,7 @@ def main():
                 success=data.get("success", "neutral"),
                 significance=data.get("significance", "routine"),
                 context=data.get("context", ""),
+                reasoning_trace=data.get("reasoning_trace"),
             )
 
     elif args.command == "reflect":
@@ -1586,6 +2156,16 @@ def main():
 
     elif args.command == "status":
         result = bridge.op_status()
+
+    elif args.command == "export":
+        result = bridge.op_export()
+
+    elif args.command == "import":
+        data = _read_stdin_json()
+        if not data:
+            result = {"error": "No JSON input on stdin. Expected: cognitive export package"}
+        else:
+            result = bridge.op_import(data)
 
     else:
         result = {"error": f"Unknown command: {args.command}"}

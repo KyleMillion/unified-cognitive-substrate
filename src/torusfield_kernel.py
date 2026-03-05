@@ -649,11 +649,13 @@ class Router:
     beta: float = 1.10    # cost weight
     gamma: float = 0.35   # novelty weight
     delta: float = 0.50   # context energy coupling weight (v1.2)
+    epsilon: float = 0.75  # negative knowledge penalty weight (v2.0)
     temperature: float = 1.0
 
     def pick(self, rng: random.Random, graph: EdgeGraph,
              policy: PolicyKernel, src: str,
-             context_energy: Optional[Dict[str, float]] = None) -> int:
+             context_energy: Optional[Dict[str, float]] = None,
+             penalty_energy: Optional[Dict[str, float]] = None) -> int:
         candidates = graph.adj.get(src, [])
         if not candidates:
             return -1
@@ -668,6 +670,10 @@ class Router:
             # routing when bridge.consult() populates the context_energy field
             if context_energy:
                 s += self.delta * context_energy.get(e.dst, 0.0)
+            # v2.0: Negative knowledge penalty — dead ends mathematically
+            # suppress paths toward known-bad destinations
+            if penalty_energy:
+                s -= self.epsilon * penalty_energy.get(e.dst, 0.0)
             scores.append(s / max(self.temperature, 0.01))
 
         m = max(scores)
@@ -683,7 +689,8 @@ class Router:
 
     def score_outgoing(self, graph: EdgeGraph, policy: PolicyKernel,
                        src: str,
-                       context_energy: Optional[Dict[str, float]] = None
+                       context_energy: Optional[Dict[str, float]] = None,
+                       penalty_energy: Optional[Dict[str, float]] = None
                        ) -> List[Dict]:
         """Score all outgoing edges. Used by bridge.consult() for advisory."""
         candidates = graph.adj.get(src, [])
@@ -696,11 +703,15 @@ class Router:
             ctx_boost = 0.0
             if context_energy:
                 ctx_boost = self.delta * context_energy.get(e.dst, 0.0)
+            penalty = 0.0
+            if penalty_energy:
+                penalty = self.epsilon * penalty_energy.get(e.dst, 0.0)
             scored.append({
                 "to": e.dst, "edge_index": ei,
-                "score": round(base + ctx_boost, 6),
+                "score": round(base + ctx_boost - penalty, 6),
                 "base_score": round(base, 6),
                 "context_boost": round(ctx_boost, 6),
+                "penalty": round(penalty, 6),
             })
         scored.sort(key=lambda x: -x["score"])
         return scored
