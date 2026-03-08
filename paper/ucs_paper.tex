@@ -504,6 +504,39 @@ A diffusion sweep confirmed that context differentiation is robust
 across 0--25 diffusion steps, with all levels maintaining 3 distinct
 top-1 picks.
 
+\subsection{Retrieval Index Benchmark (v2.1)}
+
+As UCS accumulates judgment nodes, the bridge must retrieve structurally
+relevant prior decisions during \texttt{consult()} without an $O(N)$ scan
+over the full judgment store. We therefore introduced a lightweight
+inverted index over routing snapshots, \texttt{RoutingSnapshotIndex}, with
+three buckets: (1) \texttt{cursor} value, (2) destination capabilities
+appearing in \texttt{top\_paths}, and (3) non-trivial \texttt{context\_energy}
+keys. When a routing state is present, retrieval first uses this index to
+produce a candidate set and then scores only those candidates by keyword,
+capability, temporal decay, and structural similarity.
+
+We benchmarked the pre-filter reduction ratio using a debug counter that
+reports \emph{candidates scored} / \emph{total nodes}. Three conditions were
+tested:
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Random baseline (100 nodes).} Varied cursors and routing snapshots.
+\item \textbf{Clustered data (99 nodes), targeted query, min\_signals=1.} Three
+  clusters of 33 nodes each; query matched one cluster signature.
+\item \textbf{Clustered data (99 nodes), targeted query, min\_signals=2.} Same
+  dataset and query; stricter structural overlap requirement.
+\end{itemize}
+
+In the random baseline, the pre-filter reduced scoring from 100 nodes to
+79 candidates (79\%). In the clustered dataset, the pre-filter isolated the
+matching cluster, scoring 33 candidates out of 99 (33\%) under both
+min\_signals settings. This corresponds to a 67\% reduction in the scoring
+set on structured operational data. Because index lookup is constant-time in
+the number of indexed signals and the candidate ratio depends on structural
+overlap rather than corpus size, this reduction holds linearly as the judgment
+store grows.
+
 \subsection{Test Suite}
 
 The complete system passes 17 automated tests covering initialization,
